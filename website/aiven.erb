@@ -1,0 +1,95 @@
+<% wrap_layout :inner do %>
+    <% content_for :sidebar do %>
+        <div class="docs-sidebar hidden-print affix-top" role="complementary">
+            <a href="#" class="subnav-toggle">(Expand/collapse all)</a>
+            <ul class="nav docs-sidenav">
+                <li>
+                    <a href="/docs/providers/index.html">All Providers</a>
+                </li>
+                <li>
+                    <a href="/docs/providers/aiven/index.html">Kafka Provider</a>
+                </li>
+                <li>
+                    <a href="#">Provider Resources</a>
+                    <ul class="nav">
+                        <li>
+                            <a href="/docs/providers/aiven/r/project.html">aiven_project</a>
+                        </li>
+                        <li>
+                            <a href="/docs/providers/aiven/r/service.html">aiven_service</a>
+                        </li>
+                        <li>
+                            <a href="/docs/providers/aiven/r/database.html">aiven_database</a>
+                        </li>
+                        <li>
+                            <a href="/docs/providers/aiven/r/service_user.html">aiven_service_user</a>
+                        </li>
+                        <li>
+                            <a href="/docs/providers/aiven/r/connection_pool.html">aiven_connection_pool</a>
+                        </li>
+                        <li>
+                            <a href="/docs/providers/aiven/r/kafka_topic.html">aiven_kafka_topic</a>
+                        </li>
+                        <li>
+                            <a href="/docs/providers/aiven/r/kafka_acl.html">aiven_kafka_acl</a>
+                        </li>
+                        <li>
+                            <a href="/docs/providers/aiven/r/service_integration_endpoint.html">aiven_service_integration_endpoint</a>
+                        </li>
+                        <li>
+                            <a href="/docs/providers/aiven/r/service_integration.html">aiven_service_integration</a>
+                        </li>
+                        <li>
+                            <a href="/docs/providers/aiven/r/project_user.html">aiven_project_user</a>
+                        </li>
+                        <li>
+                            <a href="/docs/providers/aiven/r/project_vpc.html">aiven_project_vpc</a>
+                        </li>
+                        <li>
+                            <a href="/docs/providers/aiven/r/vpc_peering_connection.html">aiven_vpc_peering_connection</a>
+                        </li>
+                    </ul>
+                </li>
+                <li>
+                     <a href="#">Provider Data Sources</a>
+                     <ul class="nav">
+                         <li>
+                             <a href="/docs/providers/aiven/d/project.html">aiven_project</a>
+                         </li>
+                         <li>
+                             <a href="/docs/providers/aiven/d/service.html">aiven_service</a>
+                         </li>
+                         <li>
+                             <a href="/docs/providers/aiven/d/database.html">aiven_database</a>
+                         </li>
+                         <li>
+                             <a href="/docs/providers/aiven/d/service_user.html">aiven_service_user</a>
+                         </li>
+                         <li>
+                             <a href="/docs/providers/aiven/d/connection_pool.html">aiven_connection_pool</a>
+                         </li>
+                         <li>
+                             <a href="/docs/providers/aiven/d/kafka_topic.html">aiven_kafka_topic</a>
+                         </li>
+                         <li>
+                             <a href="/docs/providers/aiven/d/kafka_acl.html">aiven_kafka_acl</a>
+                         </li>
+                         <li>
+                             <a href="/docs/providers/aiven/d/service_integration_endpoint.html">aiven_service_integration_endpoint</a>
+                         </li>
+                         <li>
+                             <a href="/docs/providers/aiven/d/project_user.html">aiven_project_user</a>
+                         </li>
+                         <li>
+                             <a href="/docs/providers/aiven/d/project_vpc.html">aiven_project_vpc</a>
+                         </li>
+                         <li>
+                             <a href="/docs/providers/aiven/d/vpc_peering_connection.html">aiven_vpc_peering_connection</a>
+                         </li>
+                     </ul>
+                 </li>
+            </ul>
+        </div>
+    <% end %>
+    <%= yield %>
+<% end %>
