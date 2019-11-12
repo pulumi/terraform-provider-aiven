@@ -1802,7 +1802,7 @@
       },
       "variant": {
 	"createOnly": true,
-	"default": "aiven",
+	"default": null,
         "enum": [
           "aiven",
           "timescale"
