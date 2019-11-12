@@ -62,7 +62,7 @@ func GenerateTerraformUserConfigSchema(data map[string]interface{}) map[string]*
 			definition["api_type"] = "boolean"
 		}
 
-		terraformSchema[name] = generateTerraformUserConfigSchema(name, definition)
+		terraformSchema[encodeKeyName(name)] = generateTerraformUserConfigSchema(name, definition)
 	}
 
 	return terraformSchema
@@ -258,6 +258,7 @@ func convertAPIUserConfigToTerraformCompatibleFormat(
 		}
 
 		apiValue, ok := apiUserConfig[key]
+		key = encodeKeyName(key)
 		if !ok || apiValue == nil {
 			// To avoid undesired "changes" for values that are not explicitly defined return
 			// default values for anything that is not returned in the API response
@@ -347,6 +348,7 @@ func convertTerraformUserConfigToAPICompatibleFormat(
 	apiConfig := make(map[string]interface{})
 	for key, value := range userConfig {
 		definitionRaw, ok := configSchema[key]
+		key = decodeKeyName(key)
 		if !ok {
 			panic(fmt.Sprintf("Unsupported %v user config key %v", serviceType, key))
 		}
@@ -500,11 +502,11 @@ func convertTerraformUserConfigValueToAPICompatibleFormat(
 	return convertedValue, omit
 }
 
-//func encodeKeyName(key string) string {
-//	// Terraform does not accept dots in key names but Aiven API has those at least in PG user config
-//	return strings.Replace(key, ".", "__dot__", -1)
-//}
-//
-//func decodeKeyName(key string) string {
-//	return strings.Replace(key, "__dot__", ".", -1)
-//}
+func encodeKeyName(key string) string {
+	// Terraform does not accept dots in key names but Aiven API has those at least in PG user config
+	return strings.Replace(key, ".", "_dot_", -1)
+}
+
+func decodeKeyName(key string) string {
+	return strings.Replace(key, "_dot_", ".", -1)
+}
