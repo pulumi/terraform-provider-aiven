@@ -29,6 +29,8 @@ UUID is not shown in the UI it is typically easier to use the last 4 digits to i
 the card. This can be omitted if `copy_from_project` is used to copy billing info from
 another project.
 
+`account_id` is an optional property to link a project to already an existing account by using account ID
+
 `copy_from_project` is the name of another project used to copy billing information and
 some other project attributes like technical contacts from. This is mostly relevant when
 an existing project has billing type set to invoice and that needs to be copied over to a
