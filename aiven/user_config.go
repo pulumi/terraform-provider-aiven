@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/gobuffalo/packr/v2"
-	"github.com/hashicorp/terraform/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 )
 
 func readUserConfigJSONSchema(name string) map[string]interface{} {
