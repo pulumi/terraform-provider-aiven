@@ -2,14 +2,15 @@
 package aiven
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"strings"
 	"time"
 
 	"github.com/aiven/aiven-go-client"
-	"github.com/hashicorp/terraform/helper/resource"
-	"github.com/hashicorp/terraform/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 )
 
 var aivenVPCPeeringConnectionSchema = map[string]*schema.Schema{
@@ -86,6 +87,10 @@ func resourceVPCPeeringConnectionCreate(d *schema.ResourceData, m interface{}) e
 
 	client := m.(*aiven.Client)
 	projectName, vpcID := splitResourceID2(d.Get("vpc_id").(string))
+	if projectName == "" || vpcID == "" {
+		return errors.New("incorrect VPC ID, expected structure <PROJECT_NAME>/<VPC_ID>")
+	}
+
 	peerRegion := d.Get("peer_region").(string)
 
 	if peerRegion != "" {
