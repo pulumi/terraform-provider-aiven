@@ -55,6 +55,9 @@ var aivenVPCPeeringConnectionSchema = map[string]*schema.Schema{
 		Description: "Cloud provider identifier for the peering connection if available",
 		Type:        schema.TypeString,
 	},
+	"client_timeout": generateClientTimeoutsSchema(map[string]time.Duration{
+		"create": 2 * time.Minute,
+	}),
 }
 
 func resourceVPCPeeringConnection() *schema.Resource {
@@ -65,6 +68,9 @@ func resourceVPCPeeringConnection() *schema.Resource {
 		Exists: resourceVPCPeeringConnectionExists,
 		Importer: &schema.ResourceImporter{
 			State: resourceVPCPeeringConnectionState,
+		},
+		Timeouts: &schema.ResourceTimeout{
+			Create: schema.DefaultTimeout(2 * time.Minute),
 		},
 
 		Schema: aivenVPCPeeringConnectionSchema,
@@ -94,9 +100,17 @@ func resourceVPCPeeringConnectionCreate(d *schema.ResourceData, m interface{}) e
 			PeerRegion:       region,
 		},
 	)
-
 	if err != nil {
 		return err
+	}
+
+	// Get creation timeout
+	timeout, err := getTimeoutHelper(d, "create")
+	if err != nil {
+		return err
+	}
+	if timeout == 0 {
+		timeout = d.Timeout(schema.TimeoutCreate)
 	}
 
 	// Wait until the peering connection has actually been built
@@ -108,7 +122,8 @@ func resourceVPCPeeringConnectionCreate(d *schema.ResourceData, m interface{}) e
 		PeerVPC:          pc.PeerVPC,
 		PeerRegion:       pc.PeerRegion,
 	}
-	res, err := w.Conf().WaitForState()
+
+	res, err := w.Conf(timeout).WaitForState()
 	if err != nil {
 		return err
 	}
@@ -119,6 +134,7 @@ func resourceVPCPeeringConnectionCreate(d *schema.ResourceData, m interface{}) e
 	} else {
 		d.SetId(buildResourceID(projectName, vpcID, pc.PeerCloudAccount, pc.PeerVPC))
 	}
+
 	return copyVPCPeeringConnectionPropertiesFromAPIResponseToTerraform(d, pc, projectName, vpcID)
 }
 
@@ -134,6 +150,7 @@ func parsePeeringVPCId(resourceID string) (string, string, string, string, *stri
 		peerRegion = new(string)
 		*peerRegion = parts[4]
 	}
+
 	return projectName, vpcID, peerCloudAccount, peerVPC, peerRegion
 }
 
@@ -153,6 +170,7 @@ func resourceVPCPeeringConnectionDelete(d *schema.ResourceData, m interface{}) e
 	client := m.(*aiven.Client)
 
 	projectName, vpcID, peerCloudAccount, peerVPC, peerRegion := parsePeeringVPCId(d.Id())
+
 	return client.VPCPeeringConnections.DeleteVPCPeering(projectName, vpcID, peerCloudAccount, peerVPC, peerRegion)
 }
 
@@ -161,6 +179,7 @@ func resourceVPCPeeringConnectionExists(d *schema.ResourceData, m interface{}) (
 
 	projectName, vpcID, peerCloudAccount, peerVPC, peerRegion := parsePeeringVPCId(d.Id())
 	_, err := client.VPCPeeringConnections.GetVPCPeering(projectName, vpcID, peerCloudAccount, peerVPC, peerRegion)
+
 	return resourceExists(err)
 }
 
@@ -244,8 +263,10 @@ func (w *VPCPeeringBuildWaiter) RefreshFunc() resource.StateRefreshFunc {
 }
 
 // Conf sets up the configuration to refresh.
-func (w *VPCPeeringBuildWaiter) Conf() *resource.StateChangeConf {
-	state := &resource.StateChangeConf{
+func (w *VPCPeeringBuildWaiter) Conf(timeout time.Duration) *resource.StateChangeConf {
+	log.Printf("[DEBUG] Create waiter timeout %.0f minutes", timeout.Minutes())
+
+	return &resource.StateChangeConf{
 		Pending: []string{"APPROVED"},
 		Target: []string{
 			"ACTIVE",
@@ -256,10 +277,9 @@ func (w *VPCPeeringBuildWaiter) Conf() *resource.StateChangeConf {
 			"DELETED",
 			"DELETED_BY_PEER",
 		},
-		Refresh: w.RefreshFunc(),
+		Refresh:    w.RefreshFunc(),
+		Delay:      10 * time.Second,
+		Timeout:    timeout,
+		MinTimeout: 2 * time.Second,
 	}
-	state.Delay = 10 * time.Second
-	state.Timeout = 2 * time.Minute
-	state.MinTimeout = 2 * time.Second
-	return state
 }

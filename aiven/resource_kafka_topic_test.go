@@ -46,7 +46,8 @@ func sweepKafkaTopics(region string) error {
 
 				topics, err := conn.KafkaTopics.List(project.Name, service.Name)
 				if err != nil {
-					return fmt.Errorf("error retrieving a list of kafka topics for a service `%s`: %s", service.Name, err)
+					log.Printf("[ERROR] error retrieving a list of kafka topics for a service `%s`: %s", service.Name, err)
+					continue
 				}
 
 				for _, topic := range topics {
@@ -63,16 +64,15 @@ func sweepKafkaTopics(region string) error {
 }
 
 func TestAccAivenKafkaTopic_basic(t *testing.T) {
-	t.Parallel()
-
 	resourceName := "aiven_kafka_topic.foo"
 	rName := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
 
-	resource.Test(t, resource.TestCase{
+	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:     func() { testAccPreCheck(t) },
 		Providers:    testAccProviders,
 		CheckDestroy: testAccCheckAivenKafkaTopicResourceDestroy,
 		Steps: []resource.TestStep{
+			// basic Kafka Topic test
 			{
 				Config: testAccKafkaTopicResource(rName),
 				Check: resource.ComposeTestCheckFunc(
@@ -85,6 +85,20 @@ func TestAccAivenKafkaTopic_basic(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "termination_protection", "false"),
 				),
 			},
+			// custom TF client timeouts test
+			{
+				Config: testAccKafkaTopicCustomTimeoutsResource(rName),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckAivenKafkaTopicAttributes("data.aiven_kafka_topic.topic"),
+					resource.TestCheckResourceAttr(resourceName, "project", fmt.Sprintf("test-acc-pr-%s", rName)),
+					resource.TestCheckResourceAttr(resourceName, "service_name", fmt.Sprintf("test-acc-sr-%s", rName)),
+					resource.TestCheckResourceAttr(resourceName, "topic_name", fmt.Sprintf("test-acc-topic-%s", rName)),
+					resource.TestCheckResourceAttr(resourceName, "partitions", "3"),
+					resource.TestCheckResourceAttr(resourceName, "replication", "2"),
+					resource.TestCheckResourceAttr(resourceName, "termination_protection", "false"),
+				),
+			},
+			// termination protection test
 			{
 				Config:                    testAccKafkaTopicTerminationProtectionResource(rName),
 				PreventPostDestroyRefresh: true,
@@ -105,7 +119,7 @@ func TestAccAivenKafkaTopic_basic(t *testing.T) {
 
 func TestAccAivenKafkaTopic_100topics(t *testing.T) {
 	if os.Getenv("AIVEN_ACC_LONG") == "" {
-		t.Skip(fmt.Sprintf("Acceptance tests skipped unless env AIVEN_ACC_LONG set"))
+		t.Skip("Acceptance tests skipped unless env AIVEN_ACC_LONG set")
 	}
 	t.Parallel()
 
@@ -187,8 +201,55 @@ func testAccKafkaTopicResource(name string) string {
 		}
 
 		data "aiven_kafka_topic" "topic" {
+			project = aiven_kafka_topic.foo.project
+			service_name = aiven_kafka_topic.foo.service_name
+			topic_name = aiven_kafka_topic.foo.topic_name
+		}
+		`, name, os.Getenv("AIVEN_CARD_ID"), name, name)
+}
+
+func testAccKafkaTopicCustomTimeoutsResource(name string) string {
+	return fmt.Sprintf(`
+		resource "aiven_project" "foo" {
+			project = "test-acc-pr-%s"
+			card_id="%s"	
+		}
+
+		resource "aiven_service" "bar" {
+			project = aiven_project.foo.project
+			cloud_name = "google-europe-west1"
+			plan = "business-4"
+			service_name = "test-acc-sr-%s"
+			service_type = "kafka"
+			maintenance_window_dow = "monday"
+			maintenance_window_time = "10:00:00"
+
+			timeouts {
+				create = "25m"
+				update = "20m"
+			}
+			
+			kafka_user_config {
+				kafka_version = "2.4"
+			}
+		}
+		
+		resource "aiven_kafka_topic" "foo" {
 			project = aiven_project.foo.project
 			service_name = aiven_service.bar.service_name
+			topic_name = "test-acc-topic-%s"
+			partitions = 3
+			replication = 2
+
+			timeouts {
+				create = "5m"
+				read = "5m"
+			}
+		}
+
+		data "aiven_kafka_topic" "topic" {
+			project = aiven_kafka_topic.foo.project
+			service_name = aiven_kafka_topic.foo.service_name
 			topic_name = aiven_kafka_topic.foo.topic_name
 		}
 		`, name, os.Getenv("AIVEN_CARD_ID"), name, name)
@@ -229,8 +290,8 @@ func testAccKafkaTopicTerminationProtectionResource(name string) string {
 		}
 
 		data "aiven_kafka_topic" "topic" {
-			project = aiven_project.foo.project
-			service_name = aiven_service.bar.service_name
+			project = aiven_kafka_topic.foo.project
+			service_name = aiven_kafka_topic.foo.service_name
 			topic_name = aiven_kafka_topic.foo.topic_name
 		}
 		`, name, os.Getenv("AIVEN_CARD_ID"), name, name)

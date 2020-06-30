@@ -3,10 +3,10 @@ package aiven
 
 import (
 	"fmt"
-	"strings"
-
 	"github.com/aiven/aiven-go-client"
+	"github.com/aiven/terraform-provider-aiven/aiven/templates"
 	"github.com/hashicorp/terraform/helper/schema"
+	"strings"
 )
 
 var aivenServiceIntegrationSchema = map[string]*schema.Schema{
@@ -32,17 +32,37 @@ var aivenServiceIntegrationSchema = map[string]*schema.Schema{
 		Description: "Log integration specific user configurable settings",
 		Elem: &schema.Resource{
 			Schema: GenerateTerraformUserConfigSchema(
-				GetUserConfigSchema("integration")["logs"].(map[string]interface{})),
+				templates.GetUserConfigSchema("integration")["logs"].(map[string]interface{})),
 		},
 		MaxItems: 1,
 		Optional: true,
 		Type:     schema.TypeList,
 	},
 	"mirrormaker_user_config": {
-		Description: "Mirrormaker integration specific user configurable settings",
+		Description: "Mirrormaker 1 integration specific user configurable settings",
 		Elem: &schema.Resource{
 			Schema: GenerateTerraformUserConfigSchema(
-				GetUserConfigSchema("integration")["mirrormaker"].(map[string]interface{})),
+				templates.GetUserConfigSchema("integration")["mirrormaker"].(map[string]interface{})),
+		},
+		MaxItems: 1,
+		Optional: true,
+		Type:     schema.TypeList,
+	},
+	"kafka_mirrormaker_user_config": {
+		Description: "Mirrormaker 2 integration specific user configurable settings",
+		Elem: &schema.Resource{
+			Schema: GenerateTerraformUserConfigSchema(
+				templates.GetUserConfigSchema("integration")["kafka_mirrormaker"].(map[string]interface{})),
+		},
+		MaxItems: 1,
+		Optional: true,
+		Type:     schema.TypeList,
+	},
+	"kafka_connect_user_config": {
+		Description: "Kafka Connect specific user configurable settings",
+		Elem: &schema.Resource{
+			Schema: GenerateTerraformUserConfigSchema(
+				templates.GetUserConfigSchema("integration")["kafka_connect"].(map[string]interface{})),
 		},
 		MaxItems: 1,
 		Optional: true,
@@ -189,19 +209,33 @@ func copyServiceIntegrationPropertiesFromAPIResponseToTerraform(
 	integration *aiven.ServiceIntegration,
 	project string,
 ) error {
-	d.Set("project", project)
+	if err := d.Set("project", project); err != nil {
+		return err
+	}
+
 	if integration.DestinationEndpointID != nil {
-		d.Set("destination_endpoint_id", buildResourceID(project, *integration.DestinationEndpointID))
+		if err := d.Set("destination_endpoint_id", buildResourceID(project, *integration.DestinationEndpointID)); err != nil {
+			return err
+		}
 	} else if integration.DestinationService != nil {
-		d.Set("destination_service_name", *integration.DestinationService)
+		if err := d.Set("destination_service_name", *integration.DestinationService); err != nil {
+			return err
+		}
 	}
 	if integration.SourceEndpointID != nil {
-		d.Set("source_endpoint_id", buildResourceID(project, *integration.SourceEndpointID))
+		if err := d.Set("source_endpoint_id", buildResourceID(project, *integration.SourceEndpointID)); err != nil {
+			return err
+		}
 	} else if integration.SourceService != nil {
-		d.Set("source_service_name", *integration.SourceService)
+		if err := d.Set("source_service_name", *integration.SourceService); err != nil {
+			return err
+		}
 	}
 	integrationType := integration.IntegrationType
-	d.Set("integration_type", integrationType)
+	if err := d.Set("integration_type", integrationType); err != nil {
+		return err
+	}
+
 	userConfig := ConvertAPIUserConfigToTerraformCompatibleFormat(
 		"integration",
 		integrationType,

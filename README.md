@@ -1,3 +1,9 @@
+---
+title: README
+nav_order: 1
+has_children: true
+---
+
 # Terraform Aiven
 
 [Terraform](https://www.terraform.io/) provider for [Aiven.io](https://aiven.io/). This
@@ -33,6 +39,20 @@ with the changes that are to be applied.
 - [Terraform](https://www.terraform.io/downloads.html) v0.10.1 or greater
 - [Go](https://golang.org/doc/install) 1.13.X or greater
 
+## Installation
+
+Work is underway to host the Aiven Terraform Provider under the official Terraform registry. Until then, the easiest method is:
+
+```
+go get -u github.com/aiven/terraform-provider-aiven
+# Global Install
+mkdir -p ~/.terraform.d/plugins
+cp $GOPATH/bin/terraform-provider-aiven ~/.terraform.d/plugins/ #Use a version here as a suffix if you specify a version in your plan
+# Local Install
+mkdir -p $PWD/terraform.d/plugins/linux_amd64 #darwin_amd64 if on OSX but linux will be needed for TF Cloud
+cp $GOPATH/bin/terraform-provider-aiven $PWD/terraform.d/plugins/linux_amd64/terraform-provider-aiven_v1.2.4 # Change to release ver
+```
+
 ## Sample project
 
 There is a [sample project](sample.tf) which sets up a project, defines Kafka,
@@ -41,6 +61,17 @@ user, and metrics and dashboard integration for the Kafka and PG databases.
 
 Make sure you have a look at the [variables](terraform.tfvars.sample) and copy it over to
 `terraform.tfvars` with your own settings.
+
+Other examples can be found in the [examples](examples) folder that provides examples to:
+* [Getting Started](examples/getting-started.tf)
+* [Team Accounts and member management](examples/account)
+* [Elasticsearch deployment and configuration](examples/elasticsearch)
+* [Standalone Kafka connect deployment with custom config](examples/kafka_connect)
+* [Deploying Kafka and Elasticsearch with a Kafka Connect Elasticsearch Sink connector](examples/kafka_connectors)
+* [Deploying Kafka with Schema Registry enabled and providing a schema](examples/kafka_schemas)
+* [Deploying Cassandra and forking (cloning the service, config and data) into a new service with a higher plan](examples/cassandra_fork)
+* [Deploying a Grafana service](examples/service)
+* [Deploying a MirrorMaker service](examples/kafka_mirrormaker)
 
 ## Importing existing infrastructure
 
@@ -141,6 +172,37 @@ resource "aiven_account" "account1" {
 
 `account_id` is an auto-generated unique account id.
 
+### Resource Account Authentication
+```
+resource "aiven_account_authentication" "foo" {
+    account_id = aiven_account.<ACCOUNT_RESOURCE>.account_id
+    name = "auth-1"
+    type = "saml"
+    enabled = true
+    saml_certificate = "---CERTIFICATE---"
+    saml_entity_id = "https://example.com/00000"
+    saml_idp_url = "https://example.com/sso/saml"
+}
+```
+
+`account_id` is an unique account id.
+
+`name` is an account authentication name.
+
+`type` is an account authentication type, can be one of `internal` and `saml`.
+
+`enabled` defines an authentication method enabled or not. 
+
+`saml_certificate` is a SAML Certificate.
+
+`saml_entity_id` is a SAML Entity Id.
+
+`saml_idp_url` is a SAML Idp URL.
+
+`saml_acs_url` is a SAML Assertion Consumer Service URL.
+
+`saml_metadata_url` is a SAML Metadata URL
+
 ### Resource Account Team
 ```
 resource "aiven_account_team" "account_team1" {
@@ -226,6 +288,11 @@ resource "aiven_service" "myservice" {
         ip_filter = ["0.0.0.0/0"]
         pg_version = "10"
     }
+    
+    timeouts {
+        create = "20m"
+        update = "15m"
+    }
 }
 ```
 
@@ -256,7 +323,7 @@ intended service usage rather than current attributes.
 
 `service_type` is the actual service that is being provided. Currently available
 options are `cassadra`, `elasticsearch`, `grafana`, `influxdb`, `kafka`,
-`pg` (PostreSQL) and `redis`. This value cannot be changed after service creation.
+`pg` (PostgreSQL) and `redis`. This value cannot be changed after service creation.
 
 `project_vpc_id` optionally specifies the VPC the service should run in. If the value
 is not set the service is not run inside a VPC. When set, the value should be given as a
@@ -270,6 +337,10 @@ set this to `true` for all production services to prevent unintentional service
 deletions. This does not shield against deleting databases or topics but for services
 with backups much of the content can at least be restored from backup in case accidental
 deletion is done.
+
+`client_timeout` a deprecated custom client timeouts please use `timeouts` instead.
+
+`timeouts` a custom client timeouts.
 
 `x_user_config` defines service specific additional configuration options. These
 options can be found from the [JSON schema description](aiven/templates/service_user_config_schema.json).
@@ -434,6 +505,11 @@ resource "aiven_kafka_topic" "mytesttopic" {
     minimum_in_sync_replicas = 2
     cleanup_policy = "delete"
     termination_protection = true
+
+    timeouts {
+        create = "1m"
+        read = "5m"
+    }
 }
 ```
 
@@ -454,6 +530,10 @@ Other properties should be self-explanatory. They can be changed after the topic
 created.
 
 Aiven ID format when importing existing resource: `<project_name>/<service_name>/<topic_name>`
+
+`client_timeout` a deprecated custom client timeouts please use `timeouts` instead.
+
+`timeouts` a custom client timeouts.
 
 ### Resource Kafka ACL
 
@@ -550,6 +630,40 @@ They should be defined using reference as shown above to set up dependencies cor
 
 `config` is the Kafka Connector configuration parameters, where `topics`, `connector.class` and `name` 
 are required parameters but the rest of them are connector type specific. 
+
+### Resource MirrorMaker 2 Replication Flow
+```
+resource "aiven_mirrormaker_replication_flow" "f1" {
+  project = aiven_project.kafka-mm-project1.project
+  service_name = aiven_service.mm.service_name
+  source_cluster = aiven_service.source.service_name
+  target_cluster = aiven_service.target.service_name
+  enable = true
+
+  topics = [
+    ".*",
+  ]
+
+  topics_blacklist = [
+    ".*[\\-\\.]internal",
+    ".*\\.replica",
+    "__.*"
+  ]
+}
+```
+
+`project` and `service_name` define the project and service the Kafka MirrorMaker Replication 
+Flow belongs to. They should be defined using reference as shown above to set up dependencies correctly.
+
+`source_cluster` is a source cluster alias.
+
+`target_cluster` is a target cluster alias.
+
+`enable` enable of disable replication flows for a mirror maker service 
+
+`topics` is a list of topics and/or regular expressions to replicate.
+
+`topics_blacklist` is a list of topics and/or regular expressions to not replicate.
 
 ### Resource Elasticsearch ACL
 
@@ -711,6 +825,10 @@ resource "aiven_project_vpc" "myvpc" {
     project = "${aiven_project.myproject.project}"
     cloud_name = "google-europe-west1"
     network_cidr = "192.168.0.1/24"
+
+    timeouts {
+        create = "5m"
+    }
 }
 ```
 
@@ -720,6 +838,8 @@ resource "aiven_project_vpc" "myvpc" {
 in. See the Service resource for additional information.
 
 `network_cidr` defines the network CIDR of the VPC.
+
+`client_timeout` a custom client timeouts.
 
 Computed property `state` tells the current state of the VPC. This property cannot be
 set, only read.
@@ -735,6 +855,10 @@ resource "aiven_vpc_peering_connection" "mypeeringconnection" {
     peer_cloud_account = "<PEER_ACCOUNT_ID>"
     peer_vpc = "<PEER_VPC_ID/NAME>"
     peer_region = "<PEER_REGION>"
+
+    timeouts {
+        create = "10m"
+    }
 }
 ```
 
@@ -746,6 +870,10 @@ peered with.
 `peer_vpc` defines the identifier or name of the remote VPC.
 
 `peer_region` defines the region of the remote VPC if it is not in the same region as Aiven VPC.
+
+`client_timeout` a deprecated custom client timeouts please use `timeouts` instead.
+
+`timeouts` a custom client timeouts.
 
 `state` is the state of the peering connection. This property is computed by Aiven 
 therefore cannot be set, only read. Where state can be one of: `APPROVED`, 
