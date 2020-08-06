@@ -1,23 +1,19 @@
+branches:
+  only:
+    - master
+    - v1
+    - "/^v([0-9]+)\\.([0-9]+)\\.([0-9]+)(?:\\-(rc\\.[0-9]+)*)?$/"
 language: go
-go:
-  - 1.13.x
-
+go: 1.13.x
 os:
-  - linux
   - osx
-
-install: make bootstrap
-
+  - linux
 cache:
   - directories:
       - "$GOPATH/bin"
       - "$GOPATH/pkg"
-
-branches:
-  only:
-    - master
-    - "/^v([0-9]+)\\.([0-9]+)\\.([0-9]+)(?:\\-(rc\\.[0-9]+)*)?$/"
-
+      - "$PWD/tmp"
 script:
+  - make bootstrap
   - make lint
   - make test
