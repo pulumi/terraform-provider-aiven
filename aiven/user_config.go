@@ -205,12 +205,11 @@ func convertAPIUserConfigToTerraformCompatibleFormat(
 			case int:
 				terraformConfig[key] = strconv.Itoa(apiValue.(int))
 			case []interface{}:
-				if properties, ok := hasNestedUserConfigurationOptionItems(apiValue, schemaDefinition); ok {
+				if hasNestedUserConfigurationOptionItems(apiValue, schemaDefinition) {
 					var list []interface{}
 					for _, v := range apiValue.([]interface{}) {
-
 						res := convertAPIUserConfigToTerraformCompatibleFormat(
-							v.(map[string]interface{}), properties,
+							v.(map[string]interface{}), schemaDefinition["items"].(map[string]interface{})["properties"].(map[string]interface{}),
 						)
 						list = append(list, res)
 					}
@@ -234,31 +233,24 @@ func convertAPIUserConfigToTerraformCompatibleFormat(
 
 // hasNestedUserConfigurationOptionItems determines if the user configuration option has nested
 // items by definition and base on API value.
-func hasNestedUserConfigurationOptionItems(
-	apiValue interface{}, schemaDefinition map[string]interface{},
-) (map[string]interface{}, bool) {
-	// check if API value has nested an items type of map[string]interface{}
+func hasNestedUserConfigurationOptionItems(apiValue interface{}, schemaDefinition map[string]interface{}) bool {
+	var result bool
+
+	// check if API
+	//value has nested an items type of map[string]interface{}
 	for _, v := range apiValue.([]interface{}) {
 		if b, ok := v.(map[string]interface{}); ok && b != nil {
 			// check if schemaDefinition has [items] key
-			if items, ok := schemaDefinition["items"]; ok {
-				if _, ok := items.(map[string]interface{}); !ok {
-					return nil, false
-				}
-
+			if _, ok := schemaDefinition["items"]; ok {
 				// check if schemaDefinition has [items][properties] key
-				if properties, ok := schemaDefinition["items"].(map[string]interface{})["properties"]; ok {
-					if _, ok := properties.(map[string]interface{}); !ok {
-						return nil, false
-					}
-
-					return properties.(map[string]interface{}), true
+				if _, ok := schemaDefinition["items"].(map[string]interface{})["properties"]; ok {
+					result = true
 				}
 			}
 		}
 	}
 
-	return nil, false
+	return result
 }
 
 // ConvertTerraformUserConfigToAPICompatibleFormat converts Terraform user configuration to API compatible
@@ -442,12 +434,12 @@ func convertTerraformUserConfigValueToAPICompatibleFormatObject(
 func convertTerraformUserConfigValueToAPICompatibleFormatInteger(value interface{}) (int, error) {
 	var convertedValue int
 
-	switch value.(type) {
+	switch value := value.(type) {
 	case int:
-		convertedValue = value.(int)
+		convertedValue = value
 	case string:
 		var err error
-		convertedValue, err = strconv.Atoi(value.(string))
+		convertedValue, err = strconv.Atoi(value)
 		if err != nil {
 			return 0, fmt.Errorf("impossible to convert int to a string: %s", err)
 		}
@@ -499,9 +491,9 @@ func convertTerraformUserConfigValueToAPICompatibleFormatBoolean(value interface
 func convertTerraformUserConfigValueToAPICompatibleFormatString(value interface{}) (string, error) {
 	var convertedValue string
 
-	switch value.(type) {
+	switch value := value.(type) {
 	case string:
-		convertedValue = value.(string)
+		convertedValue = value
 	default:
 		return "", fmt.Errorf("expected string but got %s", value)
 	}

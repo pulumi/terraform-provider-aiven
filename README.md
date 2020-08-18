@@ -1,7 +1,6 @@
 ---
-title: README
-nav_order: 1
-has_children: true
+title: Home
+nav_exclude: true
 ---
 
 # Terraform Aiven
@@ -9,7 +8,7 @@ has_children: true
 [Terraform](https://www.terraform.io/) provider for [Aiven.io](https://aiven.io/). This
 provider allows you to conveniently manage all resources for Aiven.
 
-**A word of caution**: While Terraform is an extremely powerful tool that can make
+**A word of cautions**: While Terraform is an extremely powerful tool that can make
 managing your infrastructure a breeze, great care must be taken when comparing the
 changes that are about to applied to your infrastructure. When it comes to stateful
 services, you cannot just re-create a resource and have it in the original state;
@@ -36,8 +35,8 @@ attempted to be deleted so even with this setting enabled you need to be very ca
 with the changes that are to be applied.
 
 ## Requirements
-- [Terraform](https://www.terraform.io/downloads.html) v0.10.1 or greater
-- [Go](https://golang.org/doc/install) 1.13.X or greater
+- [Terraform](https://www.terraform.io/downloads.html) v0.12.X or greater
+- [Go](https://golang.org/doc/install) 1.14.X or greater
 
 ## Installation
 
@@ -67,7 +66,8 @@ Other examples can be found in the [examples](examples) folder that provides exa
 * [Team Accounts and member management](examples/account)
 * [Elasticsearch deployment and configuration](examples/elasticsearch)
 * [Standalone Kafka connect deployment with custom config](examples/kafka_connect)
-* [Deploying Kafka and Elasticsearch with a Kafka Connect Elasticsearch Sink connector](examples/kafka_connectors)
+* [Deploying Kafka and Elasticsearch with a Kafka Connect Elasticsearch Sink connector](examples/kafka_connectors/es_sink)
+* [Deploying Kafka and Elasticsearch with a Kafka Connect Mongo Sink connector](examples/kafka_connectors/mongo_sink)
 * [Deploying Kafka with Schema Registry enabled and providing a schema](examples/kafka_schemas)
 * [Deploying Cassandra and forking (cloning the service, config and data) into a new service with a higher plan](examples/cassandra_fork)
 * [Deploying a Grafana service](examples/service)
@@ -338,8 +338,6 @@ deletions. This does not shield against deleting databases or topics but for ser
 with backups much of the content can at least be restored from backup in case accidental
 deletion is done.
 
-`client_timeout` a deprecated custom client timeouts please use `timeouts` instead.
-
 `timeouts` a custom client timeouts.
 
 `x_user_config` defines service specific additional configuration options. These
@@ -402,6 +400,47 @@ will handle creation of an existing read-replica integration as a no-op and will
 return the identifier of the existing integration.
 
 Aiven ID format when importing existing resource: `<project_name>/<service_name>`.
+
+### Separate Service Resources
+
+Starting from the version 2 Aiven Provider supports separate Terraform resources for each 
+service type available in Aiven Cloud. 
+
+List of available resources:
+- `aiven_pg` PostgreSQL service 
+- `aiven_cassandra` Cassandra service
+- `aiven_elasticsearch` Elasticsearch service
+- `aiven_grafana` Grafana service
+- `aiven_influxdb` Influxdb service
+- `aiven_redis` Redis service
+- `aiven_mysql` MySQL service
+- `aiven_kafka` Kafka service
+- `aiven_kafka_connect` Kafka Connect service
+- `aiven_kafka_mirrormaker` Kafka Mirrormaker 2 service
+ 
+Instructions on how to use them are similar to `aiven_service` with the exception that 
+for example `aiven_kafka` contains only all the necessary configuration options related 
+to this service type.
+
+Each resource for certain service type has the following structure:
+```
+resource "aiven_<TYPE>" "my-service" {
+    project = aiven_project.my-project.project
+    cloud_name = "google-europe-west1"
+    plan = "business-4"
+    service_name = "my-service1"
+    maintenance_window_dow = "monday"
+    maintenance_window_time = "10:00:00"
+    
+    <TYPE>_user_config {
+        ...
+    
+        <TYPE> {
+            ...
+        }
+    }
+}
+```
 
 ### Resource Database
 
@@ -530,8 +569,6 @@ Other properties should be self-explanatory. They can be changed after the topic
 created.
 
 Aiven ID format when importing existing resource: `<project_name>/<service_name>/<topic_name>`
-
-`client_timeout` a deprecated custom client timeouts please use `timeouts` instead.
 
 `timeouts` a custom client timeouts.
 
@@ -839,7 +876,7 @@ in. See the Service resource for additional information.
 
 `network_cidr` defines the network CIDR of the VPC.
 
-`client_timeout` a custom client timeouts.
+`timeouts` a custom client timeouts.
 
 Computed property `state` tells the current state of the VPC. This property cannot be
 set, only read.
@@ -847,7 +884,7 @@ set, only read.
 Aiven ID format when importing existing resource: `<project_name>/<VPC_UUID>`. The UUID
 is not directly visible in the Aiven web console.
 
-### Resource VPC Peering Connection
+## Resource VPC Peering Connection
 
 ```
 resource "aiven_vpc_peering_connection" "mypeeringconnection" {
@@ -870,8 +907,6 @@ peered with.
 `peer_vpc` defines the identifier or name of the remote VPC.
 
 `peer_region` defines the region of the remote VPC if it is not in the same region as Aiven VPC.
-
-`client_timeout` a deprecated custom client timeouts please use `timeouts` instead.
 
 `timeouts` a custom client timeouts.
 
@@ -915,6 +950,36 @@ there. `state_info` field contains more details about the particular issue.
 Aiven ID format when importing existing resource: `<project_name>/<VPC_UUID>/<peer_cloud_account>/<peer_vpc>`.
 Aiven ID format when importing existing cross-region resource: `<project_name>/<VPC_UUID>/<peer_cloud_account>/<peer_vpc>/peer_region`.
 The UUID is not directly visible in the Aiven web console.
+
+## Resource Transit Gateway VPC Attachment
+
+```
+resource "aiven_transit_gateway_vpc_attachment" "attachment" {
+    vpc_id = aiven_project_vpc.bar.id
+    peer_cloud_account = "<PEER_ACCOUNT_ID>"
+    peer_vpc = "google-project1"
+    peer_region = "google-europe-west1"
+    user_peer_network_cidrs = [ "10.0.0.0/24" ]
+}
+```
+
+`vpc_id` is the Aiven VPC the peering connection is associated with.
+
+`peer_cloud_account` AWS account ID of the peered VPC.
+
+`peer_vpc` Transit gateway ID
+
+`peer_region` AWS region of the peered VPC (if not in the same region as Aiven VPC).
+
+`user_peer_network_cidrs` List of private IPv4 ranges to route through the peering connection.
+
+`timeouts` a custom client timeouts.
+
+`state` is the state of the peering connection.
+
+`state_info` state-specific help or error information.
+
+`peering_connection_id` Cloud provider identifier for the peering connection if available.
 
 ## Datasource options
 

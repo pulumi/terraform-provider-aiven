@@ -3,11 +3,10 @@ package aiven
 import (
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/terraform"
-	"github.com/stretchr/testify/assert"
+	"log"
 	"os"
 	"reflect"
 	"testing"
-	"time"
 )
 
 var (
@@ -38,8 +37,10 @@ func testAccPreCheck(t *testing.T) {
 		t.Fatal("AIVEN_TOKEN must be set for acceptance tests")
 	}
 
-	if v := os.Getenv("AIVEN_CARD_ID"); v == "" {
-		t.Fatal("AIVEN_CARD_ID must be set for acceptance tests")
+	// Provider a project name with enough credits to run acceptance
+	// tests or project name with the assigned payment card.
+	if v := os.Getenv("AIVEN_PROJECT_NAME"); v == "" {
+		log.Print("[WARNING] AIVEN_PROJECT_NAME must be set for some acceptance tests")
 	}
 }
 
@@ -81,98 +82,6 @@ func Test_validateDurationString(t *testing.T) {
 			}
 			if !(tt.wantErrors == (len(gotErrors) > 0)) {
 				t.Errorf("validateDurationString() gotErrors = %v", gotErrors)
-			}
-		})
-	}
-}
-
-func Test_generateClientTimeoutsSchema(t *testing.T) {
-	type args struct {
-		timeouts map[string]time.Duration
-	}
-	tests := []struct {
-		name string
-		args args
-		want *schema.Schema
-	}{
-		{
-			"basic",
-			args{map[string]time.Duration{"create": 1 * time.Minute}},
-			&schema.Schema{
-				Type:        schema.TypeSet,
-				MaxItems:    1,
-				Description: "Custom Terraform Client timeouts",
-				Optional:    true,
-				ForceNew:    true,
-				Elem: &schema.Resource{
-					Schema: map[string]*schema.Schema{
-						"create": {
-							Type:         schema.TypeString,
-							Description:  "create timeout",
-							Optional:     true,
-							ValidateFunc: validateDurationString,
-						},
-					},
-				},
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := generateClientTimeoutsSchema(tt.args.timeouts)
-			assert.Equal(t, tt.want.Type, got.Type)
-			assert.Equal(t, tt.want.MaxItems, got.MaxItems)
-			assert.Equal(t, tt.want.Description, got.Description)
-			assert.Equal(t, tt.want.Optional, got.Optional)
-
-			for name, s := range got.Elem.(*schema.Resource).Schema {
-				want := tt.want.Elem.(*schema.Resource).Schema[name]
-
-				assert.Equal(t, want.Type, s.Type)
-				assert.Equal(t, want.Description, s.Description)
-				assert.Equal(t, want.Optional, s.Optional)
-			}
-		})
-	}
-}
-
-func Test_getTimeoutHelper(t *testing.T) {
-	type args struct {
-		d               *schema.ResourceData
-		name            string
-		defaultDuration time.Duration
-	}
-	tests := []struct {
-		name    string
-		args    args
-		want    time.Duration
-		wantErr bool
-	}{
-		{
-			name: "basic",
-			args: args{
-				d: resourceService().Data(&terraform.InstanceState{
-					ID:         "",
-					Attributes: nil,
-					Ephemeral:  terraform.EphemeralState{},
-					Meta:       nil,
-					Tainted:    false,
-				}),
-				name:            "create",
-				defaultDuration: 1 * time.Minute,
-			},
-			want: 0,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := getTimeoutHelper(tt.args.d, tt.args.name)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("getTimeoutHelper() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if got != tt.want {
-				t.Errorf("getTimeoutHelper() got = %v, want %v", got, tt.want)
 			}
 		})
 	}

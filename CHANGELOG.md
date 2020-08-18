@@ -4,6 +4,30 @@ parent: README
 nav_order: 1
 ---# Changelog
 
+## [2.0.0] - 2020-08-18
+- Migration to Terraform Plugin SDK 0.12
+- Add transit gateway vpc attachment documentation
+- Add mongo sink connector examples and tests
+- Kafka ACL regex modification
+- New resources:
+    - `aiven_pg` PostgreSQL service
+    - `aiven_cassandra` Cassandra service
+    - `aiven_elasticsearch` Elasticsearch service
+    - `aiven_grafana` Grafana service
+    - `aiven_influxdb` Influxdb service
+    - `aiven_redis` Redis service
+    - `aiven_mysql` MySQL service
+    - `aiven_kafka` Kafka service
+    - `aiven_kafka_connect` Kafka Connect service
+    - `aiven_kafka_mirrormaker` Kafka Mirrormaker 2 service
+
+## [1.3.5] - 2020-08-11
+Add support for transit gateway vpc attachment
+
+## [1.3.4] - 2020-08-10
+- Expose new azure config parameters in aiven_vpc_peering_connection resource
+- Add support for new user configuration options
+
 ## [1.3.3] - 2020-08-06
 Fix account team projects resource project reference bug
 
@@ -17,7 +41,7 @@ Fix account team projects resource project reference bug
 Improve vpc_id error handling for vpc peering connection
 
 ## [1.3.0] - 2020-06-18
-- Add support for Kafka Mirrormaker 2 
+- Add support for Kafka Mirrormaker 2
 - User go-client 1.5.5
 - User service configuration options refactoring
 - Fix Kafka ACL data source
@@ -25,7 +49,7 @@ Improve vpc_id error handling for vpc peering connection
 - Add support for Terraform native timeouts
 - Add support for Accounts Authentication
 - Kafka ACL allow wildcard for username
-- Replace Packr2 with go generate 
+- Replace Packr2 with go generate
 
 ## [1.2.4] - 2020-05-07
 - Speed up kafka topic availability waiter
@@ -45,7 +69,7 @@ Add backwards compatibility for old TF state files created before Kafka `topic` 
 - Project VPC resource graceful deletion.
 
 ## [1.2.1] - 2020-03-02
-Terraform client-side termination protection for resources: 
+Terraform client-side termination protection for resources:
 - aiven_kafka_topic
 - aiven_database
 
@@ -55,10 +79,10 @@ Terraform client-side termination protection for resources:
      - account_team
      - account_team_member
      - account_team_project
- 
-- New configuration options 
+
+- New configuration options
 - Fix for a read-only replica service types
-- Service specific acceptance tests 
+- Service specific acceptance tests
 
 ## [1.1.6] - 2020-02-07
 Fix for a problem that appears for normal boolean user configuration settings
@@ -69,7 +93,7 @@ Fix for a problem that appears for optional bool user configuration settings
 ## [1.1.4] - 2020-02-03
 - Acceptance tests
 - Fix <service>_user_config population problem during import
- 
+
 ## [1.1.3] - 2020-01-24
 Service pg_user_config variant configuration option remove default value.
 
