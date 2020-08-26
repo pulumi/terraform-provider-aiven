@@ -40,17 +40,66 @@ with the changes that are to be applied.
 
 ## Installation
 
-Work is underway to host the Aiven Terraform Provider under the official Terraform registry. Until then, the easiest method is:
+Work is underway to host the Aiven Terraform Provider under the official Terraform registry.
+Until then, the easiest methods are:
 
-```
+**Terraform client version 0.12 and below**
+```shell script
 go get -u github.com/aiven/terraform-provider-aiven
+
 # Global Install
 mkdir -p ~/.terraform.d/plugins
 cp $GOPATH/bin/terraform-provider-aiven ~/.terraform.d/plugins/ #Use a version here as a suffix if you specify a version in your plan
+
 # Local Install
 mkdir -p $PWD/terraform.d/plugins/linux_amd64 #darwin_amd64 if on OSX but linux will be needed for TF Cloud
 cp $GOPATH/bin/terraform-provider-aiven $PWD/terraform.d/plugins/linux_amd64/terraform-provider-aiven_v1.2.4 # Change to release ver
 ```
+
+**Terraform client version 0.13 and below**
+
+Download the Aiven provider for Linux AMD64. 
+```shell script
+curl -Lo terraform-provider-aiven https://github.com/aiven/terraform-provider-aiven/releases/download/v2.X.X/terraform-provider-aiven-linux-amd64_v2.X.X
+
+chmod +x terraform-provider-aiven
+```
+*Please specify version that you like to use and if you are not using Linux AMD64, 
+download the correct binary for your system from the [release page](https://github.com/aiven/terraform-provider-aiven/releases).*
+
+Third-party provider plugins — locally installed providers, not on the registry — need to be 
+assigned an (arbitrary) source and placed in the appropriate subdirectory for Terraform to find and use them.
+Create the appropriate subdirectory within the user plugins directory for the Aiven provider.
+```shell script
+mkdir -p ~/.terraform.d/plugins/aiven.io/provider/aiven/2.X/linux_amd64
+```
+*If you are not using Linux AMD64 replace `linux_amd64` with your `$OS_$ARCH`, and the same for the provider version.*
+
+Finally, move the Aiven provider binary into the newly created directory.
+```shell script
+mv terraform-provider-aiven ~/.terraform.d/plugins/aiven.io/provider/aiven/2.X/linux_amd64
+```
+
+Now Aiven provider is in your user plugins directory, you can use the provider in your Terraform configuration.
+```hcl-terraform
+terraform {
+  required_providers {
+    aiven = {
+      versions = [
+        "2.X"
+      ]
+      source = "aiven.io/provider/aiven"
+    }
+  }
+}
+
+provider "aiven" {
+  api_token = var.aiven_api_token
+}
+```
+Then, initialize your Terraform workspace by running `terraform init`. If your Aiven provider  
+is located in the correct directory, it should successfully initialize. Otherwise, move your 
+Aiven provider to the correct directory: `~/.terraform.d/plugins/aiven.io/provider/aiven/$VERSION/$OS_$ARCH/`.
 
 ## Sample project
 
@@ -63,7 +112,7 @@ Make sure you have a look at the [variables](terraform.tfvars.sample) and copy i
 
 Other examples can be found in the [examples](examples) folder that provides examples to:
 * [Getting Started](examples/getting-started.tf)
-* [Team Accounts and member management](examples/account)
+* [Account, projects, teams, and member management](examples/account)
 * [Elasticsearch deployment and configuration](examples/elasticsearch)
 * [Standalone Kafka connect deployment with custom config](examples/kafka_connect)
 * [Deploying Kafka and Elasticsearch with a Kafka Connect Elasticsearch Sink connector](examples/kafka_connectors/es_sink)
@@ -72,6 +121,7 @@ Other examples can be found in the [examples](examples) folder that provides exa
 * [Deploying Cassandra and forking (cloning the service, config and data) into a new service with a higher plan](examples/cassandra_fork)
 * [Deploying a Grafana service](examples/service)
 * [Deploying a MirrorMaker service](examples/kafka_mirrormaker)
+* [Deploying PostgreSQL services to multiple clouds and regions](examples/postgres)
 
 ## Importing existing infrastructure
 
@@ -1146,6 +1196,61 @@ data "aiven_vpc_peering_connection" "mypeeringconnection" {
 peered with.
 
 `peer_vpc` defines the identifier or name of the remote VPC.
+
+### Datasource Service Component
+Service components can be defined to get the connection info for specific service. 
+Services may support multiple different access routes (VPC peering and public access), 
+have additional components or support various authentication methods. Each of these 
+may be represented by different DNS name or TCP port and the specific component to 
+match can be selected by specifying appropriate filters as shown below.
+
+```hcl-terraform
+data "aiven_service_component" "sc1" {
+    project = aiven_kafka.project1.project
+    service_name = aiven_kafka.service1.service_name
+    component = "kafka"
+    route = "dynamic"
+    kafka_authentication_method = "certificate"
+}
+```
+
+`project` and `service_name` define the project and service the service component
+belongs to.
+
+`component` is a service component name. Component may match the name of the service 
+(`cassandra`, `elasticsearch`, `grafana`, `influxdb`, `kafka`, `kafka_connect`, `mysql`, 
+`pg` and `redis`), in which case the connection info of the service itself is returned. 
+Some service types support additional service specific components like `kibana` for 
+Elasticsearch, `kafka_connect`, `kafka_rest` and `schema_registry` for Kafka, and 
+`pgbouncer` for PostgreSQL. Most service types also support `prometheus`.
+
+`route` is network access route. The route may be one of `dynamic`, `public`, and `private`. 
+Usually, you'll want to use `dynamic`, which for services that are not in a private network 
+identifies the regular public DNS name of the service and for services in a private network  
+the private DNS name. If the service is in a private network but has also public access  
+enabled the `public` route type can be used to get the public DNS name of the service. The  
+`private` option should typically not be used.
+
+`host` is DNS name for connecting to the service component.
+
+`port` is port number for connecting to the service component.
+
+`kafka_authentication_method` is Kafka authentication method. This is a value specific 
+to the 'kafka' service components. And has the following available options: `certificate` 
+and `sasl`. If not set by the user only entries with empty `kafka_authentication_method` 
+will be selected.
+
+`ssl` whether the endpoint is encrypted or accepts plaintext. By default endpoints are
+always encrypted and this property is only included for service components they may
+disable encryption. If not set by the user only entries with empty `ssl` or `ssl` set 
+to true will be selected.
+
+`usage` is DNS usage name, and can be one of `primary`, `replica` or `syncing`. `replica` 
+is used by services that have separate master and standby roles for which it identifies 
+the `replica` DNS name. `syncing` is used by limited set of services to expose nodes 
+before they have finished restoring state but may already be partially available, for 
+example a PostgreSQL node that is streaming WAL segments from backup or current master 
+but hasn't yet fully caught up.
 
 ## Credits
 
