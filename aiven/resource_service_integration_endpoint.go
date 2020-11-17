@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/aiven/aiven-go-client"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 var aivenServiceIntegrationEndpointSchema = map[string]*schema.Schema{
@@ -200,7 +200,12 @@ func resourceServiceIntegrationEndpointDelete(d *schema.ResourceData, m interfac
 	client := m.(*aiven.Client)
 
 	projectName, endpointID := splitResourceID2(d.Id())
-	return client.ServiceIntegrationEndpoints.Delete(projectName, endpointID)
+	err := client.ServiceIntegrationEndpoints.Delete(projectName, endpointID)
+	if err != nil && !aiven.IsNotFound(err) {
+		return err
+	}
+
+	return nil
 }
 
 func resourceServiceIntegrationEndpointExists(d *schema.ResourceData, m interface{}) (bool, error) {

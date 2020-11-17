@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/aiven/aiven-go-client"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 )
 
 // KafkaTopicAvailabilityWaiter is used to refresh the Aiven Kafka Topic endpoints when
@@ -122,7 +122,7 @@ func (w *KafkaTopicAvailabilityWaiter) Conf(timeout time.Duration) *resource.Sta
 		Target:     []string{"ACTIVE"},
 		Refresh:    w.RefreshFunc(),
 		Timeout:    timeout,
-		MinTimeout: 1 * time.Second,
+		MinTimeout: 10 * time.Second,
 	}
 }
 

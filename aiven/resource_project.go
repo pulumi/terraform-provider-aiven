@@ -4,7 +4,7 @@ package aiven
 
 import (
 	"github.com/aiven/aiven-go-client"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"os"
 	"regexp"
 )
@@ -96,7 +96,7 @@ func resourceProjectCreate(d *schema.ResourceData, m interface{}) error {
 			AccountId:       d.Get("account_id").(string),
 		},
 	)
-	if err != nil {
+	if err != nil && !aiven.IsAlreadyExists(err) {
 		return err
 	}
 
@@ -162,6 +162,10 @@ func resourceProjectDelete(d *schema.ResourceData, m interface{}) error {
 	re := regexp.MustCompile("Project with open balance cannot be deleted")
 	if err != nil && os.Getenv("TF_ACC") != "" {
 		if re.MatchString(err.Error()) && err.(aiven.Error).Status == 403 {
+			return nil
+		}
+
+		if aiven.IsNotFound(err) {
 			return nil
 		}
 	}

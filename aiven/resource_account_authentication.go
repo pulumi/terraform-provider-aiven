@@ -2,8 +2,8 @@ package aiven
 
 import (
 	"github.com/aiven/aiven-go-client"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 var aivenAccountAuthenticationSchema = map[string]*schema.Schema{
@@ -197,7 +197,7 @@ func resourceAccountAuthenticationDelete(d *schema.ResourceData, m interface{}) 
 	accountId, teamId := splitResourceID2(d.Id())
 
 	err := client.AccountAuthentications.Delete(accountId, teamId)
-	if err != nil {
+	if err != nil && !aiven.IsNotFound(err) {
 		return err
 	}
 

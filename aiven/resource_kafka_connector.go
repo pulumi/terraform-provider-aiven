@@ -3,8 +3,8 @@ package aiven
 import (
 	"fmt"
 	"github.com/aiven/aiven-go-client"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"log"
 	"time"
 )
@@ -195,7 +195,7 @@ func resourceKafkaConnectorCreate(d *schema.ResourceData, m interface{}) error {
 	}
 
 	err := m.(*aiven.Client).KafkaConnectors.Create(project, serviceName, config)
-	if err != nil {
+	if err != nil && !aiven.IsAlreadyExists(err) {
 		return err
 	}
 
@@ -205,8 +205,12 @@ func resourceKafkaConnectorCreate(d *schema.ResourceData, m interface{}) error {
 }
 
 func resourceKafkaConnectorDelete(d *schema.ResourceData, m interface{}) error {
-	return m.(*aiven.Client).KafkaConnectors.Delete(
-		splitResourceID3(d.Id()))
+	err := m.(*aiven.Client).KafkaConnectors.Delete(splitResourceID3(d.Id()))
+	if err != nil && !aiven.IsNotFound(err) {
+		return err
+	}
+
+	return nil
 }
 
 func resourceKafkaTConnectorUpdate(d *schema.ResourceData, m interface{}) error {

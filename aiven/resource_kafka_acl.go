@@ -7,10 +7,10 @@ import (
 	"strings"
 
 	"github.com/aiven/terraform-provider-aiven/pkg/cache"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 
 	"github.com/aiven/aiven-go-client"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 var aivenKafkaACLSchema = map[string]*schema.Schema{
@@ -106,7 +106,12 @@ func resourceKafkaACLDelete(d *schema.ResourceData, m interface{}) error {
 	client := m.(*aiven.Client)
 
 	projectName, serviceName, aclID := splitResourceID3(d.Id())
-	return client.KafkaACLs.Delete(projectName, serviceName, aclID)
+	err := client.KafkaACLs.Delete(projectName, serviceName, aclID)
+	if err != nil && !aiven.IsNotFound(err) {
+		return err
+	}
+
+	return nil
 }
 
 func resourceKafkaACLExists(d *schema.ResourceData, m interface{}) (bool, error) {

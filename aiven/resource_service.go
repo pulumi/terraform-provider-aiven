@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"github.com/aiven/aiven-go-client"
 	"github.com/aiven/terraform-provider-aiven/aiven/templates"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	"strconv"
 	"strings"
 	"time"
@@ -777,7 +777,7 @@ func resourceServiceCreate(d *schema.ResourceData, m interface{}) error {
 		},
 	)
 
-	if err != nil {
+	if err != nil && !aiven.IsAlreadyExists(err) {
 		return err
 	}
 
@@ -846,7 +846,12 @@ func resourceServiceDelete(d *schema.ResourceData, m interface{}) error {
 
 	projectName, serviceName := splitResourceID2(d.Id())
 
-	return client.Services.Delete(projectName, serviceName)
+	err := client.Services.Delete(projectName, serviceName)
+	if err != nil && !aiven.IsNotFound(err) {
+		return err
+	}
+
+	return nil
 }
 
 func resourceServiceExists(d *schema.ResourceData, m interface{}) (bool, error) {
@@ -903,9 +908,9 @@ func resourceServiceWait(d *schema.ResourceData, m interface{}, operation string
 
 func getMaintenanceWindow(d *schema.ResourceData) *aiven.MaintenanceWindow {
 	dow := d.Get("maintenance_window_dow").(string)
-	time := d.Get("maintenance_window_time").(string)
-	if len(dow) > 0 && len(time) > 0 {
-		return &aiven.MaintenanceWindow{DayOfWeek: dow, TimeOfDay: time}
+	t := d.Get("maintenance_window_time").(string)
+	if len(dow) > 0 && len(t) > 0 {
+		return &aiven.MaintenanceWindow{DayOfWeek: dow, TimeOfDay: t}
 	}
 	return nil
 }

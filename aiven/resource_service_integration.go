@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/aiven/aiven-go-client"
 	"github.com/aiven/terraform-provider-aiven/aiven/templates"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"strings"
 )
 
@@ -127,12 +127,12 @@ func resourceServiceIntegrationCreate(d *schema.ResourceData, m interface{}) err
 			UserConfig:            userConfig,
 		},
 	)
-
 	if err != nil {
 		return err
 	}
 
 	d.SetId(buildResourceID(projectName, integration.ServiceIntegrationID))
+
 	return copyServiceIntegrationPropertiesFromAPIResponseToTerraform(d, integration, projectName)
 }
 
@@ -172,7 +172,12 @@ func resourceServiceIntegrationDelete(d *schema.ResourceData, m interface{}) err
 	client := m.(*aiven.Client)
 
 	projectName, integrationID := splitResourceID2(d.Id())
-	return client.ServiceIntegrations.Delete(projectName, integrationID)
+	err := client.ServiceIntegrations.Delete(projectName, integrationID)
+	if err != nil && !aiven.IsNotFound(err) {
+		return err
+	}
+
+	return nil
 }
 
 func resourceServiceIntegrationExists(d *schema.ResourceData, m interface{}) (bool, error) {

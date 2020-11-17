@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/aiven/aiven-go-client"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 var aivenVPCPeeringConnectionSchema = map[string]*schema.Schema{
@@ -160,7 +160,7 @@ func resourceVPCPeeringConnectionCreate(d *schema.ResourceData, m interface{}) e
 
 	timeout := d.Timeout(schema.TimeoutCreate)
 	res, err := w.Conf(timeout).WaitForState()
-	if err != nil {
+	if err != nil && !aiven.IsAlreadyExists(err) {
 		return err
 	}
 
@@ -241,7 +241,12 @@ func resourceVPCPeeringConnectionDelete(d *schema.ResourceData, m interface{}) e
 		}
 	}
 
-	return client.VPCPeeringConnections.DeleteVPCPeering(projectName, vpcID, peerCloudAccount, peerVPC, peerRegion)
+	err = client.VPCPeeringConnections.DeleteVPCPeering(projectName, vpcID, peerCloudAccount, peerVPC, peerRegion)
+	if err != nil && !aiven.IsNotFound(err) {
+		return err
+	}
+
+	return nil
 }
 
 func resourceVPCPeeringConnectionExists(d *schema.ResourceData, m interface{}) (bool, error) {

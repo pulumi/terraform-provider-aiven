@@ -2,7 +2,7 @@ package aiven
 
 import (
 	"github.com/aiven/aiven-go-client"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 var aivenAccountSchema = map[string]*schema.Schema{
@@ -124,7 +124,7 @@ func resourceAccountDelete(d *schema.ResourceData, m interface{}) error {
 	client := m.(*aiven.Client)
 
 	err := client.Accounts.Delete(d.Id())
-	if err != nil {
+	if err != nil && !aiven.IsNotFound(err) {
 		return err
 	}
 

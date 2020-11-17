@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/aiven/aiven-go-client"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 )
 
 // KafkaTopicCreateWaiter is used to create topics. Since topics are often
@@ -33,10 +33,20 @@ func (w *KafkaTopicCreateWaiter) RefreshFunc() resource.StateRefreshFunc {
 			// If some brokers are offline while the request is being executed
 			// the operation may fail.
 			aivenError, ok := err.(aiven.Error)
-			if ok && aivenError.Status == 409 && !strings.Contains(aivenError.Message, "already exists") {
+			if ok && aivenError.Status == 409 && !aiven.IsAlreadyExists(aivenError) {
 				log.Printf("[DEBUG] Got error %v while waiting for topic to be created.", aivenError)
 				return nil, "CREATING", nil
 			}
+
+			if ok && !aiven.IsAlreadyExists(aivenError) {
+				return w.CreateRequest.TopicName, "CREATED", nil
+			}
+
+			if ok && aivenError.Status == 501 &&
+				strings.Contains(aivenError.Message, "An error occurred. Please try again later") {
+				return nil, "CREATING", nil
+			}
+
 			return nil, "", err
 		}
 
@@ -54,6 +64,6 @@ func (w *KafkaTopicCreateWaiter) Conf(timeout time.Duration) *resource.StateChan
 		Refresh:    w.RefreshFunc(),
 		Delay:      10 * time.Second,
 		Timeout:    timeout,
-		MinTimeout: 2 * time.Second,
+		MinTimeout: 10 * time.Second,
 	}
 }

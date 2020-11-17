@@ -4,8 +4,8 @@ package aiven
 import (
 	"fmt"
 	"github.com/aiven/aiven-go-client"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/resource"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"log"
 	"strings"
 	"time"
@@ -217,6 +217,10 @@ func (w *ProjectVPCDeleteWaiter) RefreshFunc() resource.StateRefreshFunc {
 		if vpc.State != "DELETING" && vpc.State != "DELETED" {
 			err := w.Client.VPCs.Delete(w.Project, w.VPCID)
 			if err != nil {
+				if aiven.IsNotFound(err) {
+					return vpc, "DELETED", nil
+				}
+
 				// VPC cannot be deleted while there are services migrating from
 				// it or service deletion is still in progress
 				if err.(aiven.Error).Status != 409 {

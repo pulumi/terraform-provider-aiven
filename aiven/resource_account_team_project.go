@@ -3,8 +3,8 @@ package aiven
 import (
 	"fmt"
 	"github.com/aiven/aiven-go-client"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 var aivenAccountTeamProjectSchema = map[string]*schema.Schema{
@@ -130,8 +130,12 @@ func resourceAccountTeamProjectUpdate(d *schema.ResourceData, m interface{}) err
 func resourceAccountTeamProjectDelete(d *schema.ResourceData, m interface{}) error {
 	client := m.(*aiven.Client)
 
-	return client.AccountTeamProjects.Delete(
-		splitResourceID3(d.Id()))
+	err := client.AccountTeamProjects.Delete(splitResourceID3(d.Id()))
+	if err != nil && !aiven.IsNotFound(err) {
+		return err
+	}
+
+	return nil
 }
 
 func resourceAccountTeamProjectExists(d *schema.ResourceData, m interface{}) (bool, error) {
