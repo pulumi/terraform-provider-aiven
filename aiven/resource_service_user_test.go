@@ -14,6 +14,7 @@ import (
 func TestAccAivenServiceUser_basic(t *testing.T) {
 	resourceName := "aiven_service_user.foo"
 	rName := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
+	rName2 := acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum)
 
 	resource.ParallelTest(t, resource.TestCase{
 		PreCheck:          func() { testAccPreCheck(t) },
@@ -21,12 +22,22 @@ func TestAccAivenServiceUser_basic(t *testing.T) {
 		CheckDestroy:      testAccCheckAivenServiceUserResourceDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccServiceUserResource(rName),
+				Config: testAccServiceUserNewPasswordResource(rName),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckAivenServiceUserAttributes("data.aiven_service_user.user"),
 					resource.TestCheckResourceAttr(resourceName, "service_name", fmt.Sprintf("test-acc-sr-%s", rName)),
 					resource.TestCheckResourceAttr(resourceName, "project", os.Getenv("AIVEN_PROJECT_NAME")),
 					resource.TestCheckResourceAttr(resourceName, "username", fmt.Sprintf("user-%s", rName)),
+					resource.TestCheckResourceAttr(resourceName, "password", "Test$1234"),
+				),
+			},
+			{
+				Config: testAccServiceUserRedisACLResource(rName2),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckAivenServiceUserAttributes("data.aiven_service_user.user"),
+					resource.TestCheckResourceAttr(resourceName, "service_name", fmt.Sprintf("test-acc-sr-%s", rName2)),
+					resource.TestCheckResourceAttr(resourceName, "project", os.Getenv("AIVEN_PROJECT_NAME")),
+					resource.TestCheckResourceAttr(resourceName, "username", fmt.Sprintf("user-%s", rName2)),
 				),
 			},
 		},
@@ -58,18 +69,52 @@ func testAccCheckAivenServiceUserResourceDestroy(s *terraform.State) error {
 	return nil
 }
 
-func testAccServiceUserResource(name string) string {
+func testAccServiceUserRedisACLResource(name string) string {
 	return fmt.Sprintf(`
 		data "aiven_project" "foo" {
 			project = "%s"
 		}
 		
-		resource "aiven_service" "bar" {
+		resource "aiven_redis" "bar" {
 			project = data.aiven_project.foo.project
 			cloud_name = "google-europe-west1"
 			plan = "startup-4"
 			service_name = "test-acc-sr-%s"
-			service_type = "pg"
+		}
+		
+		resource "aiven_service_user" "foo" {
+			service_name = aiven_redis.bar.service_name
+			project = aiven_redis.bar.project
+			username = "user-%s"
+
+			redis_acl_commands = ["+set"]
+			redis_acl_keys = ["prefix*", "another_key"]
+			redis_acl_categories = ["-@all", "+@admin"]
+
+			depends_on = [aiven_redis.bar]
+		}
+		
+		data "aiven_service_user" "user" {
+			service_name = aiven_service_user.foo.service_name
+			project = aiven_service_user.foo.project
+			username = aiven_service_user.foo.username
+
+			depends_on = [aiven_service_user.foo]
+		}
+		`, os.Getenv("AIVEN_PROJECT_NAME"), name, name)
+}
+
+func testAccServiceUserNewPasswordResource(name string) string {
+	return fmt.Sprintf(`
+		data "aiven_project" "foo" {
+			project = "%s"
+		}
+		
+		resource "aiven_pg" "bar" {
+			project = data.aiven_project.foo.project
+			cloud_name = "google-europe-west1"
+			plan = "startup-4"
+			service_name = "test-acc-sr-%s"
 			maintenance_window_dow = "monday"
 			maintenance_window_time = "10:00:00"
 			
@@ -79,14 +124,17 @@ func testAccServiceUserResource(name string) string {
 		}
 		
 		resource "aiven_service_user" "foo" {
-			service_name = aiven_service.bar.service_name
+			service_name = aiven_pg.bar.service_name
 			project = data.aiven_project.foo.project
 			username = "user-%s"
+			password = "Test$1234"
+
+			depends_on = [aiven_pg.bar]
 		}
 		
 		data "aiven_service_user" "user" {
-			service_name = aiven_service.bar.service_name
-			project = aiven_service.bar.project
+			service_name = aiven_pg.bar.service_name
+			project = aiven_pg.bar.project
 			username = aiven_service_user.foo.username
 
 			depends_on = [aiven_service_user.foo]

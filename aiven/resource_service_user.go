@@ -4,6 +4,7 @@ package aiven
 
 import (
 	"fmt"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	"strings"
 
 	"github.com/aiven/aiven-go-client"
@@ -29,16 +30,55 @@ var aivenServiceUserSchema = map[string]*schema.Schema{
 		Description: "Name of the user account",
 		ForceNew:    true,
 	},
+	"redis_acl_categories": {
+		Type:         schema.TypeList,
+		Optional:     true,
+		Description:  "Command category rules",
+		ForceNew:     true,
+		RequiredWith: []string{"redis_acl_commands", "redis_acl_keys"},
+		Elem: &schema.Schema{
+			Type: schema.TypeString,
+		},
+	},
+	"redis_acl_commands": {
+		Type:         schema.TypeList,
+		Optional:     true,
+		Description:  "Rules for individual commands",
+		ForceNew:     true,
+		RequiredWith: []string{"redis_acl_categories", "redis_acl_keys"},
+		Elem: &schema.Schema{
+			Type: schema.TypeString,
+		},
+	},
+	"redis_acl_keys": {
+		Type:         schema.TypeList,
+		Optional:     true,
+		Description:  "Key access rules",
+		ForceNew:     true,
+		RequiredWith: []string{"redis_acl_categories", "redis_acl_commands"},
+		Elem: &schema.Schema{
+			Type: schema.TypeString,
+		},
+	},
+	"password": {
+		Type:             schema.TypeString,
+		Sensitive:        true,
+		Computed:         true,
+		Optional:         true,
+		Description:      "Password of the user",
+		DiffSuppressFunc: emptyObjectDiffSuppressFunc,
+	},
+	"authentication": {
+		Type:             schema.TypeString,
+		Optional:         true,
+		Description:      "Authentication details",
+		DiffSuppressFunc: emptyObjectDiffSuppressFunc,
+		ValidateFunc:     validation.StringInSlice([]string{"caching_sha2_password", "mysql_native_password"}, false),
+	},
 	"type": {
 		Type:        schema.TypeString,
 		Computed:    true,
 		Description: "Type of the user account",
-	},
-	"password": {
-		Type:        schema.TypeString,
-		Sensitive:   true,
-		Computed:    true,
-		Description: "Password of the user",
 	},
 	"access_cert": {
 		Type:        schema.TypeString,
@@ -57,6 +97,7 @@ var aivenServiceUserSchema = map[string]*schema.Schema{
 func resourceServiceUser() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceServiceUserCreate,
+		Update: resourceServiceUserUpdate,
 		Read:   resourceServiceUserRead,
 		Delete: resourceServiceUserDelete,
 		Exists: resourceServiceUserExists,
@@ -74,19 +115,53 @@ func resourceServiceUserCreate(d *schema.ResourceData, m interface{}) error {
 	projectName := d.Get("project").(string)
 	serviceName := d.Get("service_name").(string)
 	username := d.Get("username").(string)
-	user, err := client.ServiceUsers.Create(
+	_, err := client.ServiceUsers.Create(
 		projectName,
 		serviceName,
 		aiven.CreateServiceUserRequest{
 			Username: username,
+			AccessControl: aiven.AccessControl{
+				RedisACLCategories: flattenToString(d.Get("redis_acl_categories").([]interface{})),
+				RedisACLCommands:   flattenToString(d.Get("redis_acl_commands").([]interface{})),
+				RedisACLKeys:       flattenToString(d.Get("redis_acl_keys").([]interface{})),
+			},
 		},
 	)
 	if err != nil && !aiven.IsAlreadyExists(err) {
 		return err
 	}
 
+	if newPassword, ok := d.GetOk("password"); ok {
+		_, err := client.ServiceUsers.Update(projectName, serviceName, username,
+			aiven.ModifyServiceUserRequest{
+				Authentication: optionalStringPointer(d, "authentication"),
+				NewPassword:    newPassword.(string),
+			})
+		if err != nil {
+			return err
+		}
+	}
+
 	d.SetId(buildResourceID(projectName, serviceName, username))
-	return copyServiceUserPropertiesFromAPIResponseToTerraform(d, user, projectName, serviceName)
+
+	return resourceServiceUserRead(d, m)
+}
+
+func resourceServiceUserUpdate(d *schema.ResourceData, m interface{}) error {
+	client := m.(*aiven.Client)
+
+	projectName, serviceName, username := splitResourceID3(d.Id())
+
+	_, err := client.ServiceUsers.Update(projectName, serviceName, username,
+		aiven.ModifyServiceUserRequest{
+			Authentication: optionalStringPointer(d, "authentication"),
+			NewPassword:    d.Get("password").(string),
+		})
+	if err != nil {
+		return err
+	}
+
+	return resourceServiceUserRead(d, m)
 }
 
 func copyServiceUserPropertiesFromAPIResponseToTerraform(
@@ -114,6 +189,15 @@ func copyServiceUserPropertiesFromAPIResponseToTerraform(
 		return err
 	}
 	if err := d.Set("access_key", user.AccessKey); err != nil {
+		return err
+	}
+	if err := d.Set("redis_acl_keys", user.AccessControl.RedisACLKeys); err != nil {
+		return err
+	}
+	if err := d.Set("redis_acl_categories", user.AccessControl.RedisACLCategories); err != nil {
+		return err
+	}
+	if err := d.Set("redis_acl_commands", user.AccessControl.RedisACLCommands); err != nil {
 		return err
 	}
 
