@@ -2,9 +2,11 @@
 package aiven
 
 import (
+	"context"
 	"fmt"
 	"github.com/aiven/aiven-go-client"
 	"github.com/aiven/terraform-provider-aiven/aiven/templates"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"strings"
 )
@@ -98,6 +100,106 @@ var aivenServiceIntegrationSchema = map[string]*schema.Schema{
 		Optional: true,
 		Type:     schema.TypeList,
 	},
+	"read_replica_user_config": {
+		Description: "PG Read replica specific user configurable settings",
+		Elem: &schema.Resource{
+			Schema: GenerateTerraformUserConfigSchema(
+				templates.GetUserConfigSchema("integration")["read_replica"].(map[string]interface{})),
+		},
+		MaxItems: 1,
+		Optional: true,
+		Type:     schema.TypeList,
+	},
+	"rsyslog_user_config": {
+		Description: "RSyslog specific user configurable settings",
+		Elem: &schema.Resource{
+			Schema: GenerateTerraformUserConfigSchema(
+				templates.GetUserConfigSchema("integration")["rsyslog"].(map[string]interface{})),
+		},
+		MaxItems: 1,
+		Optional: true,
+		Type:     schema.TypeList,
+	},
+	"signalfx_user_config": {
+		Description: "Signalfx specific user configurable settings",
+		Elem: &schema.Resource{
+			Schema: GenerateTerraformUserConfigSchema(
+				templates.GetUserConfigSchema("integration")["signalfx"].(map[string]interface{})),
+		},
+		MaxItems: 1,
+		Optional: true,
+		Type:     schema.TypeList,
+	},
+	"dashboard_user_config": {
+		Description: "Dashboard specific user configurable settings",
+		Elem: &schema.Resource{
+			Schema: GenerateTerraformUserConfigSchema(
+				templates.GetUserConfigSchema("integration")["dashboard"].(map[string]interface{})),
+		},
+		MaxItems: 1,
+		Optional: true,
+		Type:     schema.TypeList,
+	},
+	"datadog_user_config": {
+		Description: "Dashboard specific user configurable settings",
+		Elem: &schema.Resource{
+			Schema: GenerateTerraformUserConfigSchema(
+				templates.GetUserConfigSchema("integration")["datadog"].(map[string]interface{})),
+		},
+		MaxItems: 1,
+		Optional: true,
+		Type:     schema.TypeList,
+	},
+	"kafka_logs_user_config": {
+		Description: "Kafka Logs specific user configurable settings",
+		Elem: &schema.Resource{
+			Schema: GenerateTerraformUserConfigSchema(
+				templates.GetUserConfigSchema("integration")["kafka_logs"].(map[string]interface{})),
+		},
+		MaxItems: 1,
+		Optional: true,
+		Type:     schema.TypeList,
+	},
+	"m3aggregator_user_config": {
+		Description: "M3 aggregator specific user configurable settings",
+		Elem: &schema.Resource{
+			Schema: GenerateTerraformUserConfigSchema(
+				templates.GetUserConfigSchema("integration")["m3aggregator"].(map[string]interface{})),
+		},
+		MaxItems: 1,
+		Optional: true,
+		Type:     schema.TypeList,
+	},
+	"m3coordinator_user_config": {
+		Description: "M3 coordinator specific user configurable settings",
+		Elem: &schema.Resource{
+			Schema: GenerateTerraformUserConfigSchema(
+				templates.GetUserConfigSchema("integration")["m3coordinator"].(map[string]interface{})),
+		},
+		MaxItems: 1,
+		Optional: true,
+		Type:     schema.TypeList,
+	},
+	"prometheus_user_config": {
+		Description: "Prometheus coordinator specific user configurable settings",
+		Elem: &schema.Resource{
+			Schema: GenerateTerraformUserConfigSchema(
+				templates.GetUserConfigSchema("integration")["prometheus"].(map[string]interface{})),
+		},
+		MaxItems: 1,
+		Optional: true,
+		Type:     schema.TypeList,
+	},
+	"metrics_user_config": {
+		Description: "Metrics specific user configurable settings",
+		Elem: &schema.Resource{
+			Schema: GenerateTerraformUserConfigSchema(
+				templates.GetUserConfigSchema("integration")["metrics"].(map[string]interface{})),
+		},
+		MaxItems: 1,
+		Optional: true,
+		Type:     schema.TypeList,
+	},
 	"project": {
 		Description: "Project the integration belongs to",
 		ForceNew:    true,
@@ -120,13 +222,12 @@ var aivenServiceIntegrationSchema = map[string]*schema.Schema{
 
 func resourceServiceIntegration() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceServiceIntegrationCreate,
-		Read:   resourceServiceIntegrationRead,
-		Update: resourceServiceIntegrationUpdate,
-		Delete: resourceServiceIntegrationDelete,
-		Exists: resourceServiceIntegrationExists,
+		CreateContext: resourceServiceIntegrationCreate,
+		ReadContext:   resourceServiceIntegrationRead,
+		UpdateContext: resourceServiceIntegrationUpdate,
+		DeleteContext: resourceServiceIntegrationDelete,
 		Importer: &schema.ResourceImporter{
-			State: resourceServiceIntegrationState,
+			StateContext: resourceServiceIntegrationState,
 		},
 
 		Schema: aivenServiceIntegrationSchema,
@@ -141,7 +242,7 @@ func plainEndpointID(fullEndpointID *string) *string {
 	return &endpointID
 }
 
-func resourceServiceIntegrationCreate(d *schema.ResourceData, m interface{}) error {
+func resourceServiceIntegrationCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	client := m.(*aiven.Client)
 	projectName := d.Get("project").(string)
 	integrationType := d.Get("integration_type").(string)
@@ -158,33 +259,38 @@ func resourceServiceIntegrationCreate(d *schema.ResourceData, m interface{}) err
 		},
 	)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	d.SetId(buildResourceID(projectName, integration.ServiceIntegrationID))
 
-	return copyServiceIntegrationPropertiesFromAPIResponseToTerraform(d, integration, projectName)
+	return resourceServiceIntegrationRead(ctx, d, m)
 }
 
-func resourceServiceIntegrationRead(d *schema.ResourceData, m interface{}) error {
+func resourceServiceIntegrationRead(_ context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	client := m.(*aiven.Client)
 
 	projectName, integrationID := splitResourceID2(d.Id())
 	integration, err := client.ServiceIntegrations.Get(projectName, integrationID)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
-	return copyServiceIntegrationPropertiesFromAPIResponseToTerraform(d, integration, projectName)
+	err = copyServiceIntegrationPropertiesFromAPIResponseToTerraform(d, integration, projectName)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+
+	return nil
 }
 
-func resourceServiceIntegrationUpdate(d *schema.ResourceData, m interface{}) error {
+func resourceServiceIntegrationUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	client := m.(*aiven.Client)
 
 	projectName, integrationID := splitResourceID2(d.Id())
 	integrationType := d.Get("integration_type").(string)
 	userConfig := ConvertTerraformUserConfigToAPICompatibleFormat("integration", integrationType, false, d)
-	integration, err := client.ServiceIntegrations.Update(
+	_, err := client.ServiceIntegrations.Update(
 		projectName,
 		integrationID,
 		aiven.UpdateServiceIntegrationRequest{
@@ -192,33 +298,25 @@ func resourceServiceIntegrationUpdate(d *schema.ResourceData, m interface{}) err
 		},
 	)
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
-	return copyServiceIntegrationPropertiesFromAPIResponseToTerraform(d, integration, projectName)
+	return resourceServiceIntegrationRead(ctx, d, m)
 }
 
-func resourceServiceIntegrationDelete(d *schema.ResourceData, m interface{}) error {
+func resourceServiceIntegrationDelete(_ context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	client := m.(*aiven.Client)
 
 	projectName, integrationID := splitResourceID2(d.Id())
 	err := client.ServiceIntegrations.Delete(projectName, integrationID)
 	if err != nil && !aiven.IsNotFound(err) {
-		return err
+		return diag.FromErr(err)
 	}
 
 	return nil
 }
 
-func resourceServiceIntegrationExists(d *schema.ResourceData, m interface{}) (bool, error) {
-	client := m.(*aiven.Client)
-
-	projectName, integrationID := splitResourceID2(d.Id())
-	_, err := client.ServiceIntegrations.Get(projectName, integrationID)
-	return resourceExists(err)
-}
-
-func resourceServiceIntegrationState(d *schema.ResourceData, m interface{}) ([]*schema.ResourceData, error) {
+func resourceServiceIntegrationState(_ context.Context, d *schema.ResourceData, m interface{}) ([]*schema.ResourceData, error) {
 	client := m.(*aiven.Client)
 
 	if len(strings.Split(d.Id(), "/")) != 2 {
