@@ -248,7 +248,7 @@ func resourceKafkaTopic() *schema.Resource {
 			StateContext: resourceKafkaTopicState,
 		},
 		Timeouts: &schema.ResourceTimeout{
-			Create: schema.DefaultTimeout(1 * time.Minute),
+			Create: schema.DefaultTimeout(5 * time.Minute),
 			Read:   schema.DefaultTimeout(10 * time.Minute),
 			Delete: schema.DefaultTimeout(2 * time.Minute),
 		},
@@ -288,6 +288,11 @@ func resourceKafkaTopicCreate(ctx context.Context, d *schema.ResourceData, m int
 	}
 
 	d.SetId(buildResourceID(project, serviceName, topicName))
+
+	_, err = getTopic(ctx, d, m, true)
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
 	return nil
 }
@@ -333,7 +338,7 @@ func getKafkaTopicConfig(d *schema.ResourceData) aiven.KafkaTopicConfig {
 
 func resourceKafkaTopicRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	project, serviceName, topicName := splitResourceID3(d.Id())
-	topic, err := getTopic(ctx, d, m)
+	topic, err := getTopic(ctx, d, m, false)
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -354,17 +359,17 @@ func resourceKafkaTopicRead(ctx context.Context, d *schema.ResourceData, m inter
 		return diag.FromErr(err)
 	}
 	if _, ok := d.GetOk("cleanup_policy"); ok {
-		if err := d.Set("cleanup_policy", topic.CleanupPolicy); err != nil {
+		if err := d.Set("cleanup_policy", topic.Config.CleanupPolicy.Value); err != nil {
 			return diag.FromErr(err)
 		}
 	}
 	if _, ok := d.GetOk("minimum_in_sync_replicas"); ok {
-		if err := d.Set("minimum_in_sync_replicas", topic.MinimumInSyncReplicas); err != nil {
+		if err := d.Set("minimum_in_sync_replicas", topic.Config.MinInsyncReplicas.Value); err != nil {
 			return diag.FromErr(err)
 		}
 	}
 	if _, ok := d.GetOk("retention_bytes"); ok {
-		if err := d.Set("retention_bytes", topic.RetentionBytes); err != nil {
+		if err := d.Set("retention_bytes", topic.Config.RetentionBytes.Value); err != nil {
 			return diag.FromErr(err)
 		}
 	}
@@ -372,10 +377,14 @@ func resourceKafkaTopicRead(ctx context.Context, d *schema.ResourceData, m inter
 		return diag.FromErr(err)
 	}
 
-	if _, ok := d.GetOk("retention_hours"); topic.RetentionHours != nil && ok {
+	if _, ok := d.GetOk("retention_hours"); ok {
 		// it could be -1, which means infinite retention
-		if *topic.RetentionHours >= -1 {
-			if err := d.Set("retention_hours", *topic.RetentionHours); err != nil {
+		if topic.Config.RetentionMs.Value != -1 {
+			if err := d.Set("retention_hours", topic.Config.RetentionMs.Value/(1000*60*60)); err != nil {
+				return diag.FromErr(err)
+			}
+		} else {
+			if err := d.Set("retention_hours", topic.Config.RetentionMs.Value); err != nil {
 				return diag.FromErr(err)
 			}
 		}
@@ -388,7 +397,7 @@ func resourceKafkaTopicRead(ctx context.Context, d *schema.ResourceData, m inter
 	return nil
 }
 
-func getTopic(ctx context.Context, d *schema.ResourceData, m interface{}) (aiven.KafkaTopic, error) {
+func getTopic(ctx context.Context, d *schema.ResourceData, m interface{}, ignore404 bool) (aiven.KafkaTopic, error) {
 	project, serviceName, topicName := splitResourceID3(d.Id())
 
 	w := &KafkaTopicAvailabilityWaiter{
@@ -396,6 +405,7 @@ func getTopic(ctx context.Context, d *schema.ResourceData, m interface{}) (aiven
 		Project:     project,
 		ServiceName: serviceName,
 		TopicName:   topicName,
+		Ignore404:   ignore404,
 	}
 
 	timeout := d.Timeout(schema.TimeoutRead)

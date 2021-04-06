@@ -19,6 +19,7 @@ type KafkaTopicAvailabilityWaiter struct {
 	Project     string
 	ServiceName string
 	TopicName   string
+	Ignore404   bool
 }
 
 var kafkaTopicAvailabilitySem = semaphore.NewWeighted(1)
@@ -47,14 +48,23 @@ func (w *KafkaTopicAvailabilityWaiter) RefreshFunc() resource.StateRefreshFunc {
 
 			if err != nil {
 				aivenError, ok := err.(aiven.Error)
-				// Topic creation is asynchronous so it is possible for the creation call to
-				// have completed successfully yet fetcing topic info fails with 404.
-				if ok && aivenError.Status == 404 {
-					return nil, "CONFIGURING", nil
+				if !ok {
+					return nil, "CONFIGURING", err
 				}
+
+				if w.Ignore404 {
+					// Topic creation is asynchronous so it is possible for the creation call to
+					// have completed successfully yet fetcing topic info fails with 404.
+					if aivenError.Status == 404 {
+						log.Printf("[DEBUG] Got an error while waiting for a topic '%s' to be ACTIVE: %s.", w.TopicName, err)
+						return nil, "CONFIGURING", nil
+					}
+				}
+
 				// Getting topic info can sometimes temporarily fail with 501 and 502. Don't
 				// treat that as fatal error but keep on retrying instead.
-				if (ok && aivenError.Status == 501) || (ok && aivenError.Status == 502) {
+				if aivenError.Status == 501 || aivenError.Status == 502 {
+					log.Printf("[DEBUG] Got an error while waiting for a topic '%s' to be ACTIVE: %s.", w.TopicName, err)
 					return nil, "CONFIGURING", nil
 				}
 				return nil, "CONFIGURING", err
@@ -75,22 +85,16 @@ func (w *KafkaTopicAvailabilityWaiter) RefreshFunc() resource.StateRefreshFunc {
 func (w *KafkaTopicAvailabilityWaiter) refresh() error {
 	if !kafkaTopicAvailabilitySem.TryAcquire(1) {
 		log.Printf("[TRACE] Kafka Topic Availability cache refresh already in progress ...")
+		cache.GetTopicCache().AddToQueue(w.Project, w.ServiceName, w.TopicName)
 		return nil
 	}
 	defer kafkaTopicAvailabilitySem.Release(1)
 
-	c := cache.GetTopicCache()
-
 	// warming up cache
-	warmingUpCacheOne.Do(func() {
-		log.Printf("[DEBUG] Kafka Topic queue is empty, warming up cache!")
-		topics, err := w.Client.KafkaTopics.List(w.Project, w.ServiceName)
-		if err == nil {
-			for _, t := range topics {
-				c.AddToQueue(w.Project, w.ServiceName, t.TopicName)
-			}
-		}
-	})
+	c := cache.GetTopicCache()
+	if err := w.warmUpCache(c); err != nil {
+		return err
+	}
 
 	// check if topic is already in cache
 	if _, ok := c.LoadByTopicName(w.Project, w.ServiceName, w.TopicName); ok {
@@ -101,7 +105,6 @@ func (w *KafkaTopicAvailabilityWaiter) refresh() error {
 
 	for {
 		queue := c.GetQueue(w.Project, w.ServiceName)
-
 		if len(queue) == 0 {
 			break
 		}
@@ -112,24 +115,53 @@ func (w *KafkaTopicAvailabilityWaiter) refresh() error {
 			// if v2 endpoint retrieves 409 response code, it means that Kafka service has old nodes and
 			// v2 endpoint is not available, therefore using v1.
 			if err.(aiven.Error).Status == 409 {
-				log.Printf("[DEBUG] Kafka Topic V2 endpoit is not available, using v1!")
-				for _, t := range queue {
-					topic, err := w.Client.KafkaTopics.Get(w.Project, w.ServiceName, t)
-					if err != nil {
-						return err
-					}
-
-					cache.GetTopicCache().StoreByProjectAndServiceName(w.Project, w.ServiceName, []*aiven.KafkaTopic{topic})
+				err = w.v1Refresh(queue)
+				if err != nil {
+					return err
 				}
-			} else {
-				return err
 			}
+
+			if aiven.IsNotFound(err) {
+				return fmt.Errorf("one of the Kafka Topics from the queue [%+v] is not found: %w", queue, err)
+			}
+
+			return err
 		}
 
 		cache.GetTopicCache().StoreByProjectAndServiceName(w.Project, w.ServiceName, v2Topics)
 	}
 
 	return nil
+}
+
+func (w *KafkaTopicAvailabilityWaiter) v1Refresh(queue []string) error {
+	log.Printf("[DEBUG] Kafka Topic V2 endpoit is not available, using v1!")
+	for _, t := range queue {
+		topic, err := w.Client.KafkaTopics.Get(w.Project, w.ServiceName, t)
+		if err != nil {
+			return err
+		}
+
+		cache.GetTopicCache().StoreByProjectAndServiceName(w.Project, w.ServiceName, []*aiven.KafkaTopic{topic})
+	}
+	return nil
+}
+
+func (w *KafkaTopicAvailabilityWaiter) warmUpCache(c *cache.TopicCache) error {
+	var warmUpErr error
+	warmingUpCacheOne.Do(func() {
+		log.Printf("[DEBUG] Kafka Topic queue is empty, warming up cache!")
+		topics, err := w.Client.KafkaTopics.List(w.Project, w.ServiceName)
+		if err == nil {
+			for _, t := range topics {
+				c.AddToQueue(w.Project, w.ServiceName, t.TopicName)
+			}
+		} else {
+			warmUpErr = fmt.Errorf("unable to warm-up kafka topic cache %w", err)
+		}
+	})
+
+	return warmUpErr
 }
 
 // Conf sets up the configuration to refresh.
@@ -141,12 +173,12 @@ func (w *KafkaTopicAvailabilityWaiter) Conf(timeout time.Duration) *resource.Sta
 		Target:         []string{"ACTIVE"},
 		Refresh:        w.RefreshFunc(),
 		Timeout:        timeout,
-		MinTimeout:     20 * time.Second,
+		PollInterval:   30 * time.Second,
 		NotFoundChecks: 50,
 	}
 }
 
-//partitions returns a slice, of empty aiven.Partition, of specified size
+// partitions returns a slice, of empty aiven.Partition, of specified size
 func partitions(numPartitions int) (partitions []*aiven.Partition) {
 	for i := 0; i < numPartitions; i++ {
 		partitions = append(partitions, &aiven.Partition{})
