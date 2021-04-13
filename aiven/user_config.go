@@ -287,8 +287,8 @@ func convertTerraformUserConfigToAPICompatibleFormat(
 	apiConfig := make(map[string]interface{})
 
 	for key, value := range userConfig {
-		definitionRaw, ok := configSchema[key]
 		key = decodeKeyName(key)
+		definitionRaw, ok := configSchema[key]
 		if !ok {
 			panic(fmt.Sprintf("Unsupported %v user config key %v", serviceType, key))
 		}
